@@ -1,0 +1,9 @@
+flowboxchild {
+  padding: 6px;
+  border-radius: 8px;
+}
+
+flowboxchild:selected {
+  background-color: rgba(53, 132, 228, 0.4);
+  /* Adwaita blue, slightly more opaque */
+}
