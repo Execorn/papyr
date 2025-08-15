@@ -1,9 +1,8 @@
 import sys
 import os
 import gi
-from gi.repository import  GLib
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, GLib
 from .window import PapyrWindow
 
 class PapyrApplication(Gtk.Application):
@@ -12,7 +11,7 @@ class PapyrApplication(Gtk.Application):
         super().__init__(application_id="com.execorn.papyr", **kwargs)
 
     def do_startup(self):
-        """Called once when the application starts, before do_activate."""
+        """Called once when the application starts."""
         Gtk.Application.do_startup(self)
         self.load_css()
 

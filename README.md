@@ -1,120 +1,132 @@
 # Papyr
-A fast, lightweight, and `rofi`-inspired wallpaper selector for Linux desktops, designed for users of tiling window managers like `awesome`, `i3`, or `bspwm`.
+A fast, lightweight, and `rofi`-inspired wallpaper manager for Linux desktops. Papyr provides a visual, keyboard-driven interface to instantly select, set, and organize your wallpapers, with powerful features like a slideshow daemon and automatic terminal theming.
+
+It is designed for users of tiling window managers (`awesome`, `i3`, `bspwm`, etc.) who want a powerful wallpaper tool without the overhead of a full desktop environment application.
 
 ![MVP Interface](mvp.png)
 
-## About Papyr
-Papyr was born from the need for a quick, visual, and keyboard-driven way to manage and set wallpapers without the overhead of a full GUI application. It is designed to be launched with a hotkey, display a beautiful grid of your favorite wallpapers, and get out of your way.
-
-The core philosophy is to be fast, simple, and highly configurable, integrating seamlessly into minimalist desktop environments.
-
 ## Features
-- **Rofi-style Interface:** Launches a single, centered window on command. Closes on `Esc` or (optionally) when it loses focus.
-- **Fluid Thumbnail Grid:** Uses a `FlowBox` layout to display a beautiful, gapless grid of wallpaper previews that adapts to different image sizes.
-- **Efficient Caching:** Thumbnails are generated once and cached in `~/.cache/papyr/`, ensuring near-instant startups on subsequent runs.
-- **Multi-Directory Support:** Scans multiple wallpaper directories you specify in its configuration.
-- **Wallpaper Setter Integration:** Automatically detects and uses `feh` to set the selected wallpaper.
-- **Keyboard & Mouse Driven:** Navigate with arrow keys, select with `Enter` or a double-click.
+- **Fluid Thumbnail Grid:** Displays a beautiful, gapless grid of wallpaper previews that adapts to different image sizes using `Gtk.FlowBox`.
+- **Efficient Caching:** Thumbnails are generated once and cached in `~/.cache/papyr/`, ensuring near-instant startups.
+- **Slideshow Daemon:** Run a background process to automatically cycle through your wallpapers at a configurable interval.
+- **Ignore List:** Hide wallpapers from the main view without deleting the files. Press `Delete` or use the right-click menu.
+- **Customizable Order:** Organize your wallpapers with keyboard shortcuts (`Ctrl+J`/`K`) or a simple, functional drag-and-drop system. The slideshow respects this order.
+- **`pywal` Integration:** Automatically generate a new terminal color scheme from the selected wallpaper.
+- **Full Keyboard Control:** Navigate with arrow keys, select with `Enter`, ignore with `Delete`, reorder with `Ctrl+J`/`K`, and toggle the ignore view with `Ctrl+I`.
+- **Right-Click Menu:** An intuitive context menu for common actions.
 - **Customizable Theming:** The look and feel can be easily customized using a simple CSS stylesheet.
 
 ## Installation & Dependencies
 
-Papyr is a Python application that uses GTK4. You will need to install the required system and Python packages.
+Papyr is a Python application that uses GTK4.
 
 #### 1. System Dependencies (Arch Linux)
 Open a terminal and install the core dependencies using `pacman`:
+
 ```bash
 sudo pacman -S python gtk4 python-gobject python-pip feh
 ```
-- `python`: The Python 3 interpreter.
-- `gtk4`: The underlying GUI toolkit.
-- `python-gobject`: The Python bindings that allow our code to talk to GTK.
-- `python-pip`: The standard Python package installer.
-- `feh`: The backend utility used to set the wallpaper.
+- `feh` is the default backend used to set the wallpaper.
 
 #### 2. Python Dependencies
-Install the required Python libraries using `pip`:
+Install the required Python libraries using `pip`. `psutil` is used for safely managing the slideshow daemon.
+
 ```bash
-pip install tomli Pillow
+pip install tomli Pillow psutil
 ```
-- `tomli`: A fast library for parsing `.toml` configuration files.
-- `Pillow`: A powerful library for image manipulation (used for creating thumbnails).
 
 #### 3. Get the Code
 Clone this repository to your local machine:
+
 ```bash
 git clone https://github.com/execorn/papyr.git
 cd papyr
 ```
 
-#### 4. Run Papyr
-You can run the application directly from the project directory:
-```bash
-python3 papyr.py
-```
-
 ## Configuration
 
-Papyr will not run without a configuration file. You must tell it where to find your wallpapers.
+You must create a configuration file to tell Papyr where your wallpapers are located.
 
 #### 1. Create the Config File
-Create the configuration directory and file:
+
 ```bash
 mkdir -p ~/.config/papyr
 touch ~/.config/papyr/config.toml
 ```
 
 #### 2. Edit the Config File
-Paste the following into your **`~/.config/papyr/config.toml`** and **edit the paths to match your system**.
+Paste the following into **`~/.config/papyr/config.toml`** and adjust it to your needs.
 
 ```toml
 # A list of directories where Papyr should look for wallpapers.
-# Use absolute paths starting with /home/your_user or use ~.
+# Use absolute paths or the ~ shortcut.
 wallpaper_dirs = [
     "/home/execorn/wallpapers/imgs",
-    "/home/execorn/Pictures/more-wallpapers"
+    "~/Pictures/Favorites"
 ]
 
-# This section controls application behavior.
 [behavior]
-# Set this to false if Papyr closes when you just move the mouse away.
-# This is common if your window manager uses "focus follows mouse".
+# Set this to false if Papyr closes when you just move the mouse away
+# (common if your window manager uses "focus follows mouse").
 # The value MUST be lowercase: true or false.
 close_on_unfocus = false
+
+[slideshow]
+# The time between wallpaper changes, in minutes.
+interval = 10
+
+[features]
+# Set to true to automatically run 'wal' after setting a new wallpaper.
+# Requires 'wal' (pywal) to be in your PATH.
+enable_pywal = true
+```
+Upon first use, Papyr will also create an `ignore.list` and `order.list` in this directory to persist your settings.
+
+## Usage
+
+#### Running the GUI
+To select a wallpaper, simply run the main script. It's recommended to bind this command to a hotkey in your window manager.
+
+```bash
+python3 /path/to/papyr/papyr.py
 ```
 
-#### 3. Window Manager Integration (Optional but Recommended)
-To make Papyr appear centered like `rofi`, you should add a rule to your window manager's configuration.
+#### Controlling the Slideshow
+The slideshow is controlled via command-line arguments.
 
-For **AwesomeWM**, add this to your `rc.lua` file in the `awful.rules.rules` section:
-```lua
-{ rule_any = { class = { "papyr" } },
-  properties = { floating = true, placement = awful.placement.centered } },
+```bash
+# Start the background daemon
+python3 papyr.py --slideshow start
+
+# Stop the background daemon
+python3 papyr.py --slideshow stop
 ```
+The daemon will automatically use your latest settings. If you change the order while the daemon is running, you must restart it to see the new order take effect.
 
-## Customization
-You can change the appearance of the grid by editing **`papyr/papyr/style.css`**. Feel free to adjust colors, spacing, and sizes.
+#### In-App Hotkeys
+- **`Enter` / `Double-Click`**: Set selected wallpaper and close.
+- **`Esc`**: Close without setting.
+- **`Arrow Keys`**: Navigate the grid.
+- **`Delete`**: Move the selected wallpaper to the ignore list.
+- **`Ctrl+I`**: Toggle between the main view and the ignored wallpapers view.
+- **`Ctrl+J` / `Ctrl+K`**: Move the selected wallpaper down or up in the order.
 
-```css
-/* Style the child container of the FlowBox */
-flowboxchild {
-    padding: 6px;
-    border-radius: 8px;
-}
+## Development Journey & Problems Encountered
+This project was a significant learning experience, particularly when working with the modern GTK4 toolkit. Several features turned out to be far more complex than anticipated. Documenting these challenges is important for transparency and for any future developers.
 
-flowboxchild:selected {
-    background-color: rgba(53, 132, 228, 0.4);
-}
-```
+*   **GTK4 API Versioning:** The most significant hurdle was the rapid evolution of the GTK4 API. Many methods that were present in early versions or in online tutorials (`set_reorderable`, `set_content_fit`, `move`) were deprecated or removed in the user's up-to-date Arch Linux environment. This led to numerous `AttributeError` crashes and required multiple rewrites of core UI components to use more fundamental and stable APIs.
+
+*   **Drag-and-Drop Implementation:** This feature was rebuilt from scratch five times. Initial attempts using the high-level `DragSource` and `DropTarget` APIs failed because of subtle requirements (like the `accept` signal) needed to trigger the `FlowBox`'s internal animations. The final, working implementation uses a much simpler `GestureDrag`, which proved to be more direct and reliable, although it does not provide the "move out of the way" animation. This was a compromise for the sake of stability and correctness.
+
+*   **Configuration Parsing:** A subtle bug where the `close_on_unfocus` setting was always `True` was traced back to a TOML specification detail: boolean values must be lowercase (`true`/`false`), not capitalized as they are in Python.
+
+*   **Concurrency:** Early versions suffered from a race condition where the UI thread would try to load a thumbnail before the background thread had finished writing it, causing `GdkPixbuf` errors. This was solved by making the file creation atomic (writing to a `.tmp` file and then renaming it).
 
 ## Future Development (TODO)
-Papyr is under active development. Planned features include:
-- [ ] **Slideshow Mode:** A background daemon to automatically cycle through wallpapers at a set interval.
-- [ ] **Ignore List:** Ability to right-click or press `Delete` on a wallpaper to hide it from view without deleting the file.
-- [ ] **Reordering:** A mode to drag-and-drop or use keybindings to reorder the wallpaper list for the slideshow.
-- [ ] **`pywal` Integration:** Automatically generate a new terminal color scheme from the selected wallpaper.
+- [ ] **Animated Drag-and-Drop:** Revisit the `DragSource`/`DropTarget` APIs to correctly implement the "move out of the way" animation, which was sacrificed for stability in the final version.
 - [ ] **More Setters:** Add support for other wallpaper utilities like `nitrogen` (for X11) and `swaybg` (for Wayland).
 - [ ] **Online Sources:** Add the ability to pull wallpapers from sources like Unsplash or wallhaven.cc.
+- [ ] **Packaging:** Create a `setup.py` for easier installation via `pip` and potentially a `PKGBUILD` for Arch Linux users.
 
 ## License
 This project is licensed under the MIT License. See the `LICENSE` file for details.

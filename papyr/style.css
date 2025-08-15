@@ -5,5 +5,14 @@ flowboxchild {
 
 flowboxchild:selected {
   background-color: rgba(53, 132, 228, 0.4);
-  /* Adwaita blue, slightly more opaque */
+}
+
+/* New style for ignored items */
+.ignored-item {
+  opacity: 0.4;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.ignored-item:hover {
+  opacity: 1.0;
 }

@@ -3,38 +3,35 @@ import sys
 import tomli
 
 CONFIG_PATH = os.path.expanduser("~/.config/papyr/config.toml")
-
+IGNORE_LIST_PATH = os.path.expanduser("~/.config/papyr/ignore.list")
+ORDER_LIST_PATH = os.path.expanduser("~/.config/papyr/order.list")
 
 class Config:
     """Manages Papyr's configuration."""
 
     def __init__(self, path: str = CONFIG_PATH):
-
+        # Set default values
         self.wallpaper_dirs = []
         self.close_on_unfocus = True
+        self.slideshow_interval = 10
+        self.enable_pywal = False
 
         try:
             with open(path, "rb") as f:
-
                 cfg = tomli.load(f)
-                print("--- RAW CONFIG PARSED ---")
-                print(cfg)
-                print("-------------------------")
-
-                dirs = cfg.get("wallpaper_dirs", [])
-                self.wallpaper_dirs = [os.path.expanduser(d) for d in dirs if isinstance(
-                    d, str) and os.path.isdir(os.path.expanduser(d))]
-
+                
+                self.wallpaper_dirs = [os.path.expanduser(d) for d in cfg.get("wallpaper_dirs", [])]
+                
                 if 'behavior' in cfg and isinstance(cfg.get('behavior'), dict):
-                    self.close_on_unfocus = cfg['behavior'].get(
-                        'close_on_unfocus', True)
+                    self.close_on_unfocus = cfg['behavior'].get('close_on_unfocus', self.close_on_unfocus)
+                
+                if 'slideshow' in cfg and isinstance(cfg.get('slideshow'), dict):
+                    self.slideshow_interval = cfg['slideshow'].get('interval', self.slideshow_interval)
 
-            print(
-                f"FINAL LOADED SETTING: 'close_on_unfocus' is {self.close_on_unfocus}")
-
+                # New: Load feature settings
+                if 'features' in cfg and isinstance(cfg.get('features'), dict):
+                    self.enable_pywal = cfg['features'].get('enable_pywal', self.enable_pywal)
         except FileNotFoundError:
-            print(
-                f"FATAL: Configuration file not found at {path}. Please create it.", file=sys.stderr)
+            pass
         except tomli.TOMLDecodeError as e:
-            print(
-                f"FATAL: Could not parse {path}. It may have a syntax error: {e}", file=sys.stderr)
+            print(f"Error parsing config {path}: {e}", file=sys.stderr)
