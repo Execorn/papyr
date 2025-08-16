@@ -33,6 +33,20 @@ class PapyrWindow(Gtk.ApplicationWindow):
             self.set_property("always-on-top", True)
         except Exception as e:
             print(f"Warning: Could not set 'always-on-top': {e}", file=sys.stderr)
+            
+        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        # --- MODIFIED: Center search entry and add CSS class ---
+        self.search_entry = Gtk.SearchEntry(
+            hexpand=False, 
+            halign=Gtk.Align.CENTER, 
+            margin_bottom=5, 
+            margin_top=5,
+        )
+        self.search_entry.add_css_class("search-entry")
+        # --- END MODIFIED ---
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        main_vbox.append(self.search_entry)
 
         self.flowbox = Gtk.FlowBox()
         self.flowbox.set_valign(Gtk.Align.START)
@@ -42,7 +56,10 @@ class PapyrWindow(Gtk.ApplicationWindow):
         
         scrolled_window = Gtk.ScrolledWindow(child=self.flowbox)
         scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.set_child(scrolled_window)
+        scrolled_window.set_vexpand(True)
+        main_vbox.append(scrolled_window)
+
+        self.set_child(main_vbox)
 
         self.flowbox.connect("child-activated", self.on_child_activated)
         
@@ -159,21 +176,38 @@ class PapyrWindow(Gtk.ApplicationWindow):
 
     def on_key_pressed(self, controller, keyval, keycode, state):
         """Handles global key presses."""
+        is_ctrl = state & Gdk.ModifierType.CONTROL_MASK
+        
         if keyval == Gdk.KEY_Escape:
             self.close()
-            return
+            return True
 
-        is_ctrl = state & Gdk.ModifierType.CONTROL_MASK
-
-        if is_ctrl and keyval == Gdk.KEY_i:
-            self.is_showing_ignored = not self.is_showing_ignored
-            self.start_thumbnail_loading()
-        elif is_ctrl and keyval == Gdk.KEY_j:
-            self._reorder_selected_item(1)
-        elif is_ctrl and keyval == Gdk.KEY_k:
-            self._reorder_selected_item(-1)
+        if is_ctrl:
+            if keyval == Gdk.KEY_i:
+                self.is_showing_ignored = not self.is_showing_ignored
+                self.start_thumbnail_loading()
+                return True
+            elif keyval == Gdk.KEY_j:
+                self._reorder_selected_item(1)
+                return True
+            elif keyval == Gdk.KEY_k:
+                self._reorder_selected_item(-1)
+                return True
         elif keyval == Gdk.KEY_Delete:
             self._toggle_selected_item_ignore_status()
+            return True
+        elif keyval == Gdk.KEY_space:
+            self._show_fullscreen_preview()
+            return True
+
+        is_search_focused = self.search_entry.has_focus()
+        if not is_ctrl and not is_search_focused:
+            char_unicode = Gdk.keyval_to_unicode(keyval)
+            if char_unicode and chr(char_unicode).isprintable():
+                self.search_entry.grab_focus()
+                return False
+
+        return False
             
     def on_right_click(self, gesture, n_press, x, y):
         """Shows a context menu for the clicked item."""
@@ -201,7 +235,6 @@ class PapyrWindow(Gtk.ApplicationWindow):
         
         child = selected[0]
         path = child.path
-        original_index = child.get_index()
 
         if path in self.ignore_list:
             self.ignore_list.remove(path)
@@ -209,13 +242,7 @@ class PapyrWindow(Gtk.ApplicationWindow):
             self.ignore_list.add(path)
         
         self.save_list_to_file(IGNORE_LIST_PATH, self.ignore_list)
-        self.flowbox.remove(child)
-
-        child_count = sum(1 for _ in self.flowbox)
-        if child_count > 0:
-            new_index = min(original_index, child_count - 1)
-            new_selection = self.flowbox.get_child_at__index(new_index)
-            self.flowbox.select_child(new_selection)
+        self.start_thumbnail_loading()
 
     def _reorder_selected_item(self, direction: int):
         """Moves the selected item up (-1) or down (+1) and saves the new order."""
@@ -231,9 +258,49 @@ class PapyrWindow(Gtk.ApplicationWindow):
         self.flowbox.remove(child)
         self.flowbox.insert(child, new_pos)
         self.flowbox.select_child(child)
+        
+        # --- BUG FIX: Grab focus to re-enable arrow keys ---
+        self.flowbox.grab_focus()
+        # --- END FIX ---
 
         new_order = [c.path for c in self.flowbox]
         self.save_list_to_file(ORDER_LIST_PATH, new_order)
+            
+    def on_search_changed(self, search_entry):
+        """Callback to filter the flowbox based on search query."""
+        query = search_entry.get_text().lower()
+        
+        def filter_func(child):
+            if not query:
+                return True
+            filename = os.path.basename(child.path)
+            return query in filename.lower()
+
+        self.flowbox.set_filter_func(filter_func)
+        self.flowbox.invalidate_filter()
+
+    def _show_fullscreen_preview(self):
+        """Opens a new borderless window to preview the selected image."""
+        selected = self.flowbox.get_selected_children()
+        if not selected: return
+        
+        path = selected[0].path
+        preview_window = Gtk.Window(transient_for=self, modal=True, decorated=False)
+        
+        picture = Gtk.Picture.new_for_filename(path)
+        picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        preview_window.set_child(picture)
+
+        click_controller = Gtk.GestureClick.new()
+        click_controller.connect("pressed", lambda *args: preview_window.close())
+        preview_window.add_controller(click_controller)
+        
+        key_controller = Gtk.EventControllerKey.new()
+        key_controller.connect("key-pressed", lambda *args: preview_window.close())
+        preview_window.add_controller(key_controller)
+        
+        preview_window.fullscreen()
+        preview_window.present()
     
     def on_map(self, widget):
         self.grab_focus()
@@ -244,11 +311,10 @@ class PapyrWindow(Gtk.ApplicationWindow):
         GLib.timeout_add(100, self.check_focus_and_close)
 
     def check_focus_and_close(self):
-        if not self.has_focus():
+        if not self.has_focus() and not self.search_entry.has_focus():
             self.close()
         return GLib.SOURCE_REMOVE
 
-    # --- DRAG AND DROP IMPLEMENTATION (CORRECTED) ---
     def _setup_reordering_gesture(self, widget):
         """Applies a drag gesture for reordering to a widget."""
         gesture = Gtk.GestureDrag.new()
@@ -279,11 +345,8 @@ class PapyrWindow(Gtk.ApplicationWindow):
             target_pos = target_child.get_index()
             child_to_move = self.dragged_child
             
-            # --- THE FIX ---
-            # The correct method is to remove and then re-insert the child.
             self.flowbox.remove(child_to_move)
             self.flowbox.insert(child_to_move, target_pos)
-            # --- END FIX ---
 
             self.flowbox.select_child(child_to_move)
             

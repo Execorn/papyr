@@ -1,3 +1,4 @@
+/* --- Styles for Thumbnail Grid --- */
 flowboxchild {
   padding: 6px;
   border-radius: 8px;
@@ -7,7 +8,7 @@ flowboxchild:selected {
   background-color: rgba(53, 132, 228, 0.4);
 }
 
-/* New style for ignored items */
+/* --- Styles for Ignored Items (from your original file) --- */
 .ignored-item {
   opacity: 0.4;
   transition: opacity 0.2s ease-in-out;
@@ -15,4 +16,12 @@ flowboxchild:selected {
 
 .ignored-item:hover {
   opacity: 1.0;
+}
+
+/* --- New Style for the Search Bar --- */
+.search-entry {
+  /* Set a fixed size and fully rounded corners */
+  min-width: 350px;
+  max-width: 350px;
+  border-radius: 50px; 
 }

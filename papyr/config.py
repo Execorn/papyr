@@ -15,6 +15,7 @@ class Config:
         self.close_on_unfocus = True
         self.slideshow_interval = 10
         self.enable_pywal = False
+        self.setter = "auto" # Default wallpaper setter
 
         try:
             with open(path, "rb") as f:
@@ -28,9 +29,13 @@ class Config:
                 if 'slideshow' in cfg and isinstance(cfg.get('slideshow'), dict):
                     self.slideshow_interval = cfg['slideshow'].get('interval', self.slideshow_interval)
 
-                # New: Load feature settings
                 if 'features' in cfg and isinstance(cfg.get('features'), dict):
                     self.enable_pywal = cfg['features'].get('enable_pywal', self.enable_pywal)
+
+                # --- NEW: Load setter preference ---
+                if 'setter' in cfg and isinstance(cfg.get('setter'), dict):
+                    self.setter = cfg['setter'].get('command', self.setter).lower()
+
         except FileNotFoundError:
             pass
         except tomli.TOMLDecodeError as e:

@@ -10,6 +10,11 @@ from .setter import set_wallpaper
 
 PID_FILE = os.path.expanduser("~/.cache/papyr/daemon.pid")
 
+# --- NEW: Global state variables for signal handlers ---
+is_paused = False
+force_next_wallpaper = False
+# --- END NEW ---
+
 def get_pid():
     """Reads the PID from the PID file, returns None if not found or invalid."""
     if not os.path.exists(PID_FILE):
@@ -65,9 +70,44 @@ def stop():
     finally:
         if os.path.exists(PID_FILE):
             os.remove(PID_FILE)
-            
+
+# --- NEW: Signal handler functions ---
+def handle_sig_pause_resume(signum, frame):
+    """Toggles the pause state."""
+    global is_paused
+    is_paused = not is_paused
+    if is_paused:
+        print("Daemon: Paused.")
+    else:
+        print("Daemon: Resumed.")
+
+def handle_sig_next(signum, frame):
+    """Forces the next wallpaper to be set."""
+    global force_next_wallpaper
+    force_next_wallpaper = True
+    print("Daemon: Skipping to next wallpaper.")
+
+def handle_sig_prev(signum, frame):
+    """Forces the previous wallpaper to be set."""
+    # This signal handler needs to communicate back to the main loop.
+    # We'll use a global flag similar to the 'next' handler.
+    global force_prev_wallpaper
+    force_prev_wallpaper = True
+    print("Daemon: Skipping to previous wallpaper.")
+# --- END NEW ---
+
 def run_loop():
     """The main loop for the daemon process."""
+    # --- NEW: Register signal handlers ---
+    signal.signal(signal.SIGUSR1, handle_sig_pause_resume)
+    signal.signal(signal.SIGUSR2, handle_sig_next)
+    # Using SIGHUP for 'prev' as a distinct signal
+    signal.signal(signal.SIGHUP, handle_sig_prev)
+    global force_next_wallpaper
+    global force_prev_wallpaper # Add this global
+    force_prev_wallpaper = False
+    # --- END NEW ---
+
     config = Config()
     
     try:
@@ -76,7 +116,6 @@ def run_loop():
     except FileNotFoundError:
         ignore_list = set()
 
-    # --- New: Order-aware wallpaper loading ---
     wallpaper_list = []
     use_random_shuffle = True
     
@@ -84,7 +123,7 @@ def run_loop():
         print("Daemon: Custom order list found. Using it.")
         with open(ORDER_LIST_PATH, 'r') as f:
             wallpaper_list = [line.strip() for line in f if line.strip() not in ignore_list]
-        use_random_shuffle = False # Respect the user's order
+        use_random_shuffle = False
     else:
         print("Daemon: No order list found. Scanning directories.")
         VALID_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp'}
@@ -108,14 +147,36 @@ def run_loop():
     current_index = 0
 
     while True:
+        # --- MODIFIED: Main loop logic for responsiveness ---
+        while is_paused:
+            time.sleep(1) # Wait efficiently while paused
+
+        if force_prev_wallpaper:
+            current_index -= 2 # Move back two positions
+            if current_index < -1:
+                current_index = len(wallpaper_list) - 2
+            force_prev_wallpaper = False
+
         if current_index >= len(wallpaper_list):
             current_index = 0
             if use_random_shuffle:
                 random.shuffle(wallpaper_list)
+        
+        if current_index < 0:
+            current_index = len(wallpaper_list) -1
+
 
         wallpaper = wallpaper_list[current_index]
-        # We must also pass the config object here.
         set_wallpaper(wallpaper, config)
         current_index += 1
         
-        time.sleep(interval_seconds)
+        # Wait for the interval, but check for signals every second
+        for _ in range(interval_seconds):
+            if force_next_wallpaper or force_prev_wallpaper or is_paused:
+                break # Exit sleep loop immediately
+            time.sleep(1)
+        
+        if force_next_wallpaper:
+            force_next_wallpaper = False
+            continue # Skip to the next iteration
+        # --- END MODIFIED ---
