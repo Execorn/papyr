@@ -18,10 +18,10 @@ flowboxchild:selected {
   opacity: 1.0;
 }
 
-/* --- New Style for the Search Bar --- */
+/* --- Corrected Style for the Search Bar --- */
 .search-entry {
-  /* Set a fixed size and fully rounded corners */
+  /* Set a fixed width and fully rounded corners.
+     GTK does not support max-width, so we use min-width. */
   min-width: 350px;
-  max-width: 350px;
-  border-radius: 50px; 
+  border-radius: 50px;
 }

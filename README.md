@@ -12,6 +12,7 @@ It is designed for users of tiling window managers (`awesome`, `i3`, `bspwm`, et
 - **Efficient Caching:** Thumbnails are generated once and cached in `~/.cache/papyr/`, ensuring near-instant startups.
 - **Advanced Slideshow Daemon:** Run a background process to cycle through your wallpapers. Pause, resume, and skip tracks from the command line—perfect for binding to media keys.
 - **Multi-Backend Support:** Works out-of-the-box on different environments by supporting `feh` (X11), `swaybg` (Wayland), and `gsettings` (GNOME/Cinnamon), with an automatic detection mode.
+- **Multi-Monitor Aware:** Detects multiple monitors and allows setting wallpapers on specific screens via the right-click context menu (requires a compatible backend like `swaymsg`).
 - **Ignore List:** Hide wallpapers from the main view without deleting the files (`Delete` key).
 - **Customizable Order:** Organize your wallpapers with keyboard shortcuts (`Ctrl+J`/`K`) or drag-and-drop. The slideshow respects this order.
 - **`pywal` Integration:** Automatically generate a new terminal color scheme from the selected wallpaper.
@@ -28,7 +29,7 @@ Open a terminal and install the core dependencies using `pacman`:
 ```bash
 sudo pacman -S python gtk4 python-gobject python-pip feh
 ```
-- `feh` is used as a fallback setter. Other setters for your environment (like `swaybg` on Sway) may also be required.
+- `feh` is used as a fallback setter. Other setters for your environment (like `swaybg` or `swaymsg` on Sway) may also be required.
 
 #### 2. Python Dependencies
 Install the required Python libraries using `pip`. `psutil` is used for safely managing the slideshow daemon.
@@ -82,9 +83,8 @@ interval = 10
 # Requires 'wal' (pywal) to be in your PATH.
 enable_pywal = true
 
-# NEW: Choose your wallpaper setting backend.
 [setter]
-# Options: "auto", "feh", "swaybg", "gnome".
+# Options: "auto", "feh", "swaybg", "swaymsg", "gnome".
 # "auto" is recommended. It will try to detect your environment.
 command = "auto"
 ```
@@ -117,34 +117,24 @@ python3 papyr.py --slideshow resume
 python3 papyr.py --slideshow next
 python3 papyr.py --slideshow prev
 ```
-The daemon will automatically use your latest settings. If you change the order while the daemon is running, you must restart it to see the new order take effect.
 
 #### In-App Hotkeys
 - **`Enter` / `Double-Click`**: Set selected wallpaper and close.
 - **`Spacebar`**: Show a full-screen preview of the selected wallpaper.
 - **`Esc`**: Close without setting.
-- **`Arrow Keys`**: Navigate the grid.
+- **`Tab` / `Shift+Tab`**: Switch focus between the Search Bar and the wallpaper grid.
+- **`Arrow Keys`**: Navigate the grid (when it has focus).
 - **`Delete`**: Move the selected wallpaper to the ignore list.
 - **`Ctrl+I`**: Toggle between the main view and the ignored wallpapers view.
 - **`Ctrl+J` / `Ctrl+K`**: Move the selected wallpaper down or up in the order.
 
 ## Development Journey & Problems Encountered
-This project was a significant learning experience, particularly when working with the modern GTK4 toolkit. Several features turned out to be far more complex than anticipated. Documenting these challenges is important for transparency and for any future developers.
-
-*   **GTK4 API Versioning:** The most significant hurdle was the rapid evolution of the GTK4 API. Many methods that were present in early versions or in online tutorials (`set_reorderable`, `get_children`) were deprecated or removed. This led to numerous `AttributeError` crashes and required multiple rewrites of core UI components to use more fundamental and stable APIs.
-
-*   **Drag-and-Drop Implementation:** This feature was rebuilt from scratch five times. The final, working implementation uses a much simpler `GestureDrag`, which proved to be more direct and reliable, although it does not provide the "move out of the way" animation. This was a compromise for the sake of stability and correctness.
-
-*   **Configuration Parsing:** A subtle bug where the `close_on_unfocus` setting was always `True` was traced back to a TOML specification detail: boolean values must be lowercase (`true`/`false`), not capitalized as they are in Python.
-
-*   **Concurrency:** Early versions suffered from a race condition where the UI thread would try to load a thumbnail before the background thread had finished writing it, causing `GdkPixbuf` errors. This was solved by making the file creation atomic (writing to a `.tmp` file and then renaming it).
+-   **GTK4 Event Handling:** A significant challenge was architecting the keyboard event system. Early attempts with a single, central controller led to a cascade of unpredictable bugs where focus would be lost, the search bar would stop accepting text, or scrolling would fail after certain actions. The final, stable architecture uses a much simpler model where focus is explicitly passed between the search bar and the wallpaper grid (`Tab` key), allowing each widget to handle its own input (typing, arrow key navigation) without interference.
+-   **Concurrency and Race Conditions:** Many UI bugs, such as scrolling jumping to the top of the list after reordering an item, were traced to race conditions. The fixes required using `GLib.idle_add` to defer UI updates like grabbing focus or scrolling until after GTK had finished its current processing and drawing cycle, ensuring the UI was in a stable state.
+-   **`GtkPopoverMenu` Stability:** The right-click context menu would intermittently crash the application. This was traced to a memory management error where the menu was parented to a temporary widget (`GtkFlowBoxChild`) that could be destroyed. The solution was to parent the menu to the main application window itself, ensuring its stability.
 
 ## Future Development (TODO)
-- [ ] **Animated Drag-and-Drop:** Revisit the `DragSource`/`DropTarget` APIs to correctly implement the "move out of the way" animation, which was sacrificed for stability.
-- [ ] **More Setters:** Add support for other wallpaper utilities like `hyprpaper`, `wbg` (for Wayland) and `xfconf-query` (for XFCE).
-- [ ] **Multi-Monitor Support:** Allow setting different wallpapers for each monitor via the right-click menu.
-- [ ] **Online Sources:** Add the ability to pull wallpapers from sources like Unsplash or wallhaven.cc.
-- [ ] **Packaging:** Create a `setup.py` for easier installation via `pip` and potentially a `PKGBuild` for Arch Linux users.
-
-## License
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+- [ ] **Custom Script Integration:** Add a `post_set_script` option to run custom commands after a wallpaper is set.
+- [ ] **Wallpaper History:** Implement a view (`Ctrl+H`) to show recently used wallpapers.
+- [ ] **Animated Drag-and-Drop:** Revisit `Gtk.DragSource` to implement smoother drag-and-drop animations.
+- [ ] **Packaging:** Create a `setup.py` and a `PKGBUILD` for easier installation.
